@@ -25,6 +25,10 @@ import {
   useAppSettings
 } from "../appSettings";
 import { type AppLanguage, useI18n } from "../i18n";
+import flomoLogo from "../assets/import-sources/flomo.svg";
+import markdownLogo from "../assets/import-sources/markdown.svg";
+import notionLogo from "../assets/import-sources/notion.svg";
+import obsidianLogo from "../assets/import-sources/obsidian.svg";
 
 interface SettingsViewProps {
   language: AppLanguage;
@@ -56,6 +60,15 @@ interface FloatingNotice {
 interface ReleaseNoteEntry {
   version: string;
   highlights: string[];
+}
+
+interface ExportNotesResult {
+  file_path: string;
+  file_name: string;
+  bytes: number;
+  snippet_count: number;
+  folder_count: number;
+  exported_at: number;
 }
 
 const APP_VERSION = "0.1.0";
@@ -113,6 +126,65 @@ const FeatureCard: React.FC<{
     {children}
   </div>
 );
+
+const IntegrationCard: React.FC<{
+  title: string;
+  logoSrc: string;
+  accentClassName: string;
+  logoClassName?: string;
+  actionLabel: string;
+}> = ({ title, logoSrc, accentClassName, logoClassName, actionLabel }) => (
+  <div className="rounded-[24px] border border-black/5 bg-background px-5 py-4 shadow-sm transition-colors hover:border-primary/20 hover:bg-primary/[0.03]">
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-4">
+        <span
+          className={`inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border p-2 ${accentClassName}`}
+        >
+          <img
+            src={logoSrc}
+            alt={`${title} logo`}
+            className={`h-full w-full object-contain ${logoClassName ?? ""}`}
+          />
+        </span>
+        <span className="truncate text-xl font-semibold text-foreground">
+          {title}
+        </span>
+      </div>
+
+      <span className="inline-flex shrink-0 rounded-xl border border-black/8 bg-surface px-4 py-2 text-sm text-foreground/45">
+        {actionLabel}
+      </span>
+    </div>
+  </div>
+);
+
+const HistoryTabButton: React.FC<{
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}> = ({ active, label, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`rounded-full px-1 py-1 text-sm transition-colors ${
+      active ? "text-primary" : "text-foreground/45 hover:text-foreground/70"
+    }`}
+  >
+    {label}
+  </button>
+);
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Avatar Crop Dialog                                                */
@@ -408,7 +480,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onLanguageChange,
   onThemeChange
 }) => {
-  const { languageOptions, t } = useI18n();
+  const { formatDate, languageOptions, t } = useI18n();
   const {
     avatar,
     displayName,
@@ -424,7 +496,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     toggleWindowShortcut
   } = useAppSettings();
   const [activePanel, setActivePanel] = useState<
-    "root" | "features" | "release-notes" | "secondary-password"
+    | "root"
+    | "features"
+    | "release-notes"
+    | "secondary-password"
+    | "import-notes"
+    | "export-notes"
   >("root");
   const selectedTextSizeIndex = TEXT_SIZE_OPTIONS.indexOf(textSize);
 
@@ -440,6 +517,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
   const [secondaryPasswordVerified, setSecondaryPasswordVerified] = useState(false);
   const [secondaryPasswordError, setSecondaryPasswordError] = useState<string | null>(null);
+  const [activeImportHistoryTab, setActiveImportHistoryTab] = useState<
+    "pending" | "completed"
+  >("completed");
+  const [isExporting, setIsExporting] = useState(false);
+  const [lastExportResult, setLastExportResult] = useState<ExportNotesResult | null>(null);
 
   const handleAvatarClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -511,6 +593,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     showFloatingMessage(t("feedbackChannelBuilding"), "warning");
   }, [showFloatingMessage, t]);
 
+  const handleOpenImportPanel = useCallback(() => {
+    setActiveImportHistoryTab("completed");
+    setActivePanel("import-notes");
+  }, []);
+
+  const handleOpenExportPanel = useCallback(() => {
+    setActivePanel("export-notes");
+  }, []);
+
   const resetSecondaryPasswordForm = useCallback(() => {
     setCurrentPasswordInput("");
     setNextPasswordInput("");
@@ -569,6 +660,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     ]
   );
 
+  const handleExportNotes = useCallback(async () => {
+    setIsExporting(true);
+
+    try {
+      const result = await invoke<ExportNotesResult>("export_notes_as_html", {
+        language
+      });
+      setLastExportResult(result);
+      showFloatingMessage(t("exportSuccessMessage"), "success");
+    } catch (error) {
+      console.error("Failed to export notes", error);
+      showFloatingMessage(t("exportErrorMessage"), "warning");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [language, showFloatingMessage, t]);
+
   const releaseNotes: ReleaseNoteEntry[] = [
     {
       version: APP_VERSION,
@@ -590,6 +698,39 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       <span>{label}</span>
     </button>
   );
+
+  const importSources = [
+    {
+      id: "flomo",
+      title: t("importSourceFlomo"),
+      logoSrc: flomoLogo,
+      accentClassName: "border-primary/20 bg-primary/10 text-primary"
+    },
+    {
+      id: "markdown",
+      title: t("importSourceMarkdown"),
+      logoSrc: markdownLogo,
+      accentClassName: "border-primary/20 bg-primary/10 text-primary"
+    },
+    {
+      id: "obsidian",
+      title: t("importSourceObsidian"),
+      logoSrc: obsidianLogo,
+      accentClassName: "border-primary/20 bg-primary/10 text-primary",
+      logoClassName: "scale-125"
+    },
+    {
+      id: "notion",
+      title: t("importSourceNotion"),
+      logoSrc: notionLogo,
+      accentClassName: "border-primary/20 bg-primary/10 text-primary"
+    }
+  ];
+  const visibleImportHistory: Array<{
+    fileName: string;
+    size: number;
+    completedAt: number;
+  }> = [];
 
   const featureSettingsContent = (
     <div className="space-y-4">
@@ -842,6 +983,159 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     </div>
   );
 
+  const importNotesContent = (
+    <div className="space-y-4">
+      {renderPanelBackButton(t("settingsImportNotes"), () => setActivePanel("root"))}
+
+      <div className="rounded-[32px] border border-black/5 bg-surface/95 px-5 py-5 shadow-sm">
+        <div className="grid gap-4 md:grid-cols-2">
+          {importSources.map((source) => (
+            <IntegrationCard
+              key={source.id}
+              title={source.title}
+              logoSrc={source.logoSrc}
+              accentClassName={source.accentClassName}
+              logoClassName={source.logoClassName}
+              actionLabel={t("syncComingSoon")}
+            />
+          ))}
+        </div>
+
+        <div className="mt-6 rounded-[28px] border border-black/5 bg-background px-4 py-4">
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="text-[28px] font-semibold text-foreground">
+              {t("importHistoryTitle")}
+            </div>
+            <div className="inline-flex items-center gap-4">
+              <HistoryTabButton
+                active={activeImportHistoryTab === "pending"}
+                label={t("importHistoryPending")}
+                onClick={() => setActiveImportHistoryTab("pending")}
+              />
+              <HistoryTabButton
+                active={activeImportHistoryTab === "completed"}
+                label={t("importHistoryCompleted")}
+                onClick={() => setActiveImportHistoryTab("completed")}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-2xl border border-black/5">
+            <div className="grid grid-cols-[minmax(0,2fr)_140px_180px] gap-4 bg-surface px-5 py-3 text-sm font-semibold text-foreground">
+              <span>{t("importHistoryFile")}</span>
+              <span>{t("importHistorySize")}</span>
+              <span>{t("importHistoryFinishedAt")}</span>
+            </div>
+
+            {visibleImportHistory.length > 0 ? (
+              visibleImportHistory.map((entry) => (
+                <div
+                  key={`${entry.fileName}-${entry.completedAt}`}
+                  className="grid grid-cols-[minmax(0,2fr)_140px_180px] gap-4 border-t border-black/5 px-5 py-4 text-sm text-foreground/70"
+                >
+                  <span className="truncate">{entry.fileName}</span>
+                  <span>{formatFileSize(entry.size)}</span>
+                  <span>{formatDate(entry.completedAt)}</span>
+                </div>
+              ))
+            ) : (
+              <div className="flex min-h-44 items-center justify-center px-6 text-center text-base text-foreground/35">
+                {t("importHistoryEmpty")}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 text-base leading-7 text-foreground/45">
+            {t("importHistoryHint")}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const exportNotesContent = (
+    <div className="space-y-4">
+      {renderPanelBackButton(t("settingsExportNotes"), () => setActivePanel("root"))}
+
+      <div className="rounded-[32px] border border-black/5 bg-surface/95 px-5 py-5 shadow-sm">
+        <div className="max-w-3xl">
+          <div className="text-[30px] font-semibold text-foreground">
+            {t("settingsExportTitle")}
+          </div>
+          <p className="mt-3 text-base leading-7 text-foreground/60">
+            {t("settingsExportDescription")}
+          </p>
+        </div>
+
+        <div className="mt-6">
+          <div className="mb-3 text-lg font-semibold text-foreground">
+            {t("exportFormatLabel")}
+          </div>
+          <button
+            type="button"
+            className="inline-flex min-w-[124px] items-center justify-center rounded-2xl border border-primary bg-primary/8 px-5 py-3 text-base font-medium text-primary shadow-sm"
+          >
+            {t("exportFormatHtml")}
+          </button>
+        </div>
+
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => void handleExportNotes()}
+            disabled={isExporting}
+            className="inline-flex min-w-[124px] items-center justify-center rounded-2xl bg-primary px-5 py-3 text-base font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/55"
+          >
+            {isExporting ? t("exportExporting") : t("exportNow")}
+          </button>
+        </div>
+
+        {lastExportResult && (
+          <div className="mt-6 rounded-[28px] border border-black/5 bg-background px-5 py-5">
+            <div className="text-xl font-semibold text-foreground">
+              {t("exportLastResultTitle")}
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-black/5 bg-surface px-4 py-3">
+                <div className="text-sm text-foreground/45">
+                  {t("exportLastResultFile")}
+                </div>
+                <div className="mt-1 break-all text-sm text-foreground/75">
+                  {lastExportResult.file_name}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-black/5 bg-surface px-4 py-3">
+                <div className="text-sm text-foreground/45">
+                  {t("exportLastResultPath")}
+                </div>
+                <div className="mt-1 break-all text-sm text-foreground/75">
+                  {lastExportResult.file_path}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-black/5 bg-surface px-4 py-3">
+                <div className="text-sm text-foreground/45">
+                  {t("exportLastResultCount")}
+                </div>
+                <div className="mt-1 text-sm text-foreground/75">
+                  {lastExportResult.snippet_count}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-black/5 bg-surface px-4 py-3">
+                <div className="text-sm text-foreground/45">
+                  {t("exportLastResultFolders")}
+                </div>
+                <div className="mt-1 text-sm text-foreground/75">
+                  {lastExportResult.folder_count} · {formatFileSize(lastExportResult.bytes)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const sections: SettingSection[] = [
     {
       id: "account",
@@ -913,12 +1207,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           id: "import",
           icon: Upload,
           label: t("settingsImportNotes"),
-          accentDot: true
+          onClick: handleOpenImportPanel
         },
         {
           id: "export",
           icon: Download,
-          label: t("settingsExportNotes")
+          label: t("settingsExportNotes"),
+          onClick: handleOpenExportPanel
         }
       ]
     },
@@ -1083,6 +1378,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           releaseNotesContent
         ) : activePanel === "secondary-password" ? (
           secondaryPasswordContent
+        ) : activePanel === "import-notes" ? (
+          importNotesContent
+        ) : activePanel === "export-notes" ? (
+          exportNotesContent
         ) : (
           sections.map((section) => (
             <section key={section.id} className="mb-5 last:mb-0">

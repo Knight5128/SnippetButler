@@ -5,6 +5,7 @@ import {
   FileText,
   Settings
 } from "lucide-react";
+import { useAppSettings } from "../appSettings";
 import { useI18n } from "../i18n";
 
 export type AppView = "snippets" | "discovery" | "archive" | "settings";
@@ -56,6 +57,7 @@ const RailButton: React.FC<{
 
 const AppRail: React.FC<AppRailProps> = ({ activeView, onChange }) => {
   const { t } = useI18n();
+  const { avatar, displayName } = useAppSettings();
   const topItems: NavItem[] = [
     { key: "snippets", label: t("appRailSnippets"), icon: FileText },
     { key: "discovery", label: t("appRailDiscovery"), icon: Compass }
@@ -69,8 +71,16 @@ const AppRail: React.FC<AppRailProps> = ({ activeView, onChange }) => {
     <aside className="w-20 shrink-0 border-r border-black/5 bg-surface/55 px-2.5 py-4 backdrop-blur-xl">
       <div className="flex h-full flex-col">
         <div className="mb-6 flex justify-center">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-sm font-semibold text-primary shadow-sm">
-            SB
+          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-primary/15 bg-primary/10 text-sm font-semibold text-primary shadow-sm">
+            {avatar ? (
+              <img
+                src={avatar}
+                alt={displayName || "avatar"}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              "SB"
+            )}
           </div>
         </div>
 
