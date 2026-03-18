@@ -722,14 +722,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               key={note.version}
               className="rounded-3xl border border-black/5 bg-background px-5 py-4"
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-lg font-semibold text-foreground">
-                  v{note.version}
-                </div>
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                  {t("settingsReleaseNotes")}
-                </span>
-              </div>
+              <div className="text-lg font-semibold text-foreground">v{note.version}</div>
 
               <ul className="mt-4 space-y-2 text-sm leading-6 text-foreground/70">
                 {note.highlights.map((item) => (
@@ -1061,11 +1054,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           <div
             className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm shadow-lg ${
               floatingNotice.tone === "warning"
-                ? "bg-[#F4C63D] text-white"
+                ? "border border-black/8 bg-white text-black"
                 : "bg-emerald-500 text-white"
             }`}
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
+            <span
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${
+                floatingNotice.tone === "warning"
+                  ? "bg-[#F4C63D] text-white"
+                  : "bg-white/20"
+              }`}
+            >
               {floatingNotice.tone === "warning" ? (
                 <CircleAlert className="h-4 w-4" />
               ) : (
