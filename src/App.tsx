@@ -45,7 +45,7 @@ const App: React.FC = () => {
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const snippetLayoutRef = useRef<HTMLDivElement | null>(null);
   const init = useSnippetStore((s) => s.init);
-  const { language, setLanguage, t } = useI18n();
+  const { language, setLanguage } = useI18n();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -134,18 +134,6 @@ const App: React.FC = () => {
           </button>
 
           <main className="flex-1 min-w-0 flex flex-col">
-            <header className="h-10 border-b border-black/5 flex items-center justify-between px-4 text-xs text-foreground/70">
-              <span>{t("quickSaveHeader")}</span>
-              <button
-                type="button"
-                className="text-[11px] rounded-full border px-2 py-0.5 text-foreground/70 hover:text-foreground hover:border-primary"
-                onClick={() =>
-                  setTheme(theme === "light" ? "dark" : "light")
-                }
-              >
-                {theme === "light" ? t("switchToDark") : t("switchToLight")}
-              </button>
-            </header>
             <FilterBar />
             <SnippetList search={search} />
             <InputBar />

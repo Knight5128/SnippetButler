@@ -104,6 +104,9 @@ const Sidebar: React.FC<SidebarProps> = ({ search, onSearchChange }) => {
         <div className="mb-4 text-xl font-semibold text-primary">
           {t("appRailSnippets")}
         </div>
+        <div className="mb-3 text-xs text-foreground/60">
+          {t("quickSaveHeader")}
+        </div>
         <input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
