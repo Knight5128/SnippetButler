@@ -16,19 +16,38 @@ interface AppSettingsContextValue {
   sendShortcut: SendShortcutOption;
   newlineShortcut: SendShortcutOption;
   toggleWindowShortcut: string;
+  avatar: string;
+  displayName: string;
+  secondaryPassword: string;
   setTextSize: (value: TextSizeOption) => void;
   setSendShortcut: (value: SendShortcutOption) => void;
+  setAvatar: (dataUrl: string) => void;
+  setDisplayName: (name: string) => void;
+  setSecondaryPassword: (password: string) => void;
 }
 
 interface StoredSettings {
   textSize?: number;
   sendShortcut?: SendShortcutOption;
+  avatar?: string;
+  displayName?: string;
+  secondaryPassword?: string;
 }
 
 const STORAGE_KEY = "snippetbutler.app-settings";
 const DEFAULT_TEXT_SIZE: TextSizeOption = 16;
 const DEFAULT_SEND_SHORTCUT: SendShortcutOption = "shift-enter";
 const TOGGLE_WINDOW_SHORTCUT = "Ctrl+Alt+P";
+const DEFAULT_SECONDARY_PASSWORD = "0000";
+
+function generateDefaultDisplayName(): string {
+  const length = Math.floor(Math.random() * 4) + 6; // 6 to 9 digits
+  let digits = "";
+  for (let i = 0; i < length; i++) {
+    digits += Math.floor(Math.random() * 10).toString();
+  }
+  return `user_${digits}`;
+}
 
 const AppSettingsContext = createContext<AppSettingsContextValue | null>(null);
 
@@ -39,20 +58,30 @@ function isTextSizeOption(value: number): value is TextSizeOption {
 function getInitialSettings(): {
   textSize: TextSizeOption;
   sendShortcut: SendShortcutOption;
+  avatar: string;
+  displayName: string;
+  secondaryPassword: string;
 } {
   if (typeof window === "undefined") {
     return {
       textSize: DEFAULT_TEXT_SIZE,
-      sendShortcut: DEFAULT_SEND_SHORTCUT
+      sendShortcut: DEFAULT_SEND_SHORTCUT,
+      avatar: "",
+      displayName: generateDefaultDisplayName(),
+      secondaryPassword: DEFAULT_SECONDARY_PASSWORD
     };
   }
 
   try {
     const storedRaw = window.localStorage.getItem(STORAGE_KEY);
     if (!storedRaw) {
+      const defaultName = generateDefaultDisplayName();
       return {
         textSize: DEFAULT_TEXT_SIZE,
-        sendShortcut: DEFAULT_SEND_SHORTCUT
+        sendShortcut: DEFAULT_SEND_SHORTCUT,
+        avatar: "",
+        displayName: defaultName,
+        secondaryPassword: DEFAULT_SECONDARY_PASSWORD
       };
     }
 
@@ -65,12 +94,25 @@ function getInitialSettings(): {
       sendShortcut:
         stored.sendShortcut === "enter" || stored.sendShortcut === "shift-enter"
           ? stored.sendShortcut
-          : DEFAULT_SEND_SHORTCUT
+          : DEFAULT_SEND_SHORTCUT,
+      avatar: typeof stored.avatar === "string" ? stored.avatar : "",
+      displayName:
+        typeof stored.displayName === "string" && stored.displayName.length > 0
+          ? stored.displayName
+          : generateDefaultDisplayName(),
+      secondaryPassword:
+        typeof stored.secondaryPassword === "string" &&
+        /^\d{4}$/.test(stored.secondaryPassword)
+          ? stored.secondaryPassword
+          : DEFAULT_SECONDARY_PASSWORD
     };
   } catch {
     return {
       textSize: DEFAULT_TEXT_SIZE,
-      sendShortcut: DEFAULT_SEND_SHORTCUT
+      sendShortcut: DEFAULT_SEND_SHORTCUT,
+      avatar: "",
+      displayName: generateDefaultDisplayName(),
+      secondaryPassword: DEFAULT_SECONDARY_PASSWORD
     };
   }
 }
@@ -95,6 +137,9 @@ export const AppSettingsProvider: React.FC<React.PropsWithChildren> = ({
       newlineShortcut:
         settings.sendShortcut === "enter" ? "shift-enter" : "enter",
       toggleWindowShortcut: TOGGLE_WINDOW_SHORTCUT,
+      avatar: settings.avatar,
+      displayName: settings.displayName,
+      secondaryPassword: settings.secondaryPassword,
       setTextSize: (textSize) =>
         setSettings((current) => ({
           ...current,
@@ -104,6 +149,21 @@ export const AppSettingsProvider: React.FC<React.PropsWithChildren> = ({
         setSettings((current) => ({
           ...current,
           sendShortcut
+        })),
+      setAvatar: (avatar: string) =>
+        setSettings((current) => ({
+          ...current,
+          avatar
+        })),
+      setDisplayName: (displayName: string) =>
+        setSettings((current) => ({
+          ...current,
+          displayName
+        })),
+      setSecondaryPassword: (secondaryPassword: string) =>
+        setSettings((current) => ({
+          ...current,
+          secondaryPassword
         }))
     }),
     [settings]

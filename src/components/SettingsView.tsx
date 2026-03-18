@@ -1,17 +1,21 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BadgeInfo,
+  Camera,
   Check,
+  CircleAlert,
   ChevronLeft,
   ChevronRight,
   CircleDot,
   Download,
+  FileText,
   Globe2,
   Info,
-  Languages,
   MessageSquareMore,
   MoonStar,
+  Pencil,
   Settings2,
+  ShieldCheck,
   Upload,
   UserCircle2
 } from "lucide-react";
@@ -42,6 +46,25 @@ interface SettingSection {
   title: string;
   rows: SettingRow[];
 }
+
+interface FloatingNotice {
+  message: string;
+  tone: "success" | "warning";
+}
+
+interface ReleaseNoteEntry {
+  version: string;
+  highlights: string[];
+}
+
+const APP_VERSION = "0.1.0";
+
+const panelBackButtonClassName =
+  "inline-flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-foreground/60 transition-colors hover:bg-black/5 hover:text-foreground";
+
+/* ------------------------------------------------------------------ */
+/*  Reusable small components                                         */
+/* ------------------------------------------------------------------ */
 
 const ShortcutOption: React.FC<{
   checked: boolean;
@@ -89,6 +112,294 @@ const FeatureCard: React.FC<{
   </div>
 );
 
+/* ------------------------------------------------------------------ */
+/*  Avatar Crop Dialog                                                */
+/* ------------------------------------------------------------------ */
+
+const AvatarCropDialog: React.FC<{
+  imageSrc: string;
+  onConfirm: (croppedDataUrl: string) => void;
+  onCancel: () => void;
+  confirmLabel: string;
+  cancelLabel: string;
+  titleLabel: string;
+}> = ({ imageSrc, onConfirm, onCancel, confirmLabel, cancelLabel, titleLabel }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // Circle position & radius (in display coordinate space)
+  const [circleX, setCircleX] = useState(0);
+  const [circleY, setCircleY] = useState(0);
+  const [circleR, setCircleR] = useState(80);
+  const [imgSize, setImgSize] = useState({ w: 0, h: 0, naturalW: 0, naturalH: 0 });
+  const [dragging, setDragging] = useState<"move" | "resize" | null>(null);
+  const dragStart = useRef({ x: 0, y: 0, cx: 0, cy: 0, cr: 0 });
+
+  // Load the image once
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      // Fit into a 400×400 display area
+      const maxDim = 400;
+      const scale = Math.min(maxDim / img.naturalWidth, maxDim / img.naturalHeight, 1);
+      const w = img.naturalWidth * scale;
+      const h = img.naturalHeight * scale;
+      setImgSize({ w, h, naturalW: img.naturalWidth, naturalH: img.naturalHeight });
+      setCircleX(w / 2);
+      setCircleY(h / 2);
+      setCircleR(Math.min(w, h) / 2 - 10);
+    };
+    img.src = imageSrc;
+  }, [imageSrc]);
+
+  // Draw overlay
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !imgRef.current || imgSize.w === 0) return;
+    canvas.width = imgSize.w;
+    canvas.height = imgSize.h;
+    const ctx = canvas.getContext("2d")!;
+
+    // Draw image
+    ctx.drawImage(imgRef.current, 0, 0, imgSize.w, imgSize.h);
+
+    // Semi-transparent overlay
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, imgSize.w, imgSize.h);
+
+    // Cut out the circle
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Circle border
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Resize handle (small circle at bottom-right of the circle)
+    const handleAngle = Math.PI / 4;
+    const hx = circleX + circleR * Math.cos(handleAngle);
+    const hy = circleY + circleR * Math.sin(handleAngle);
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.arc(hx, hy, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.3)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }, [circleX, circleY, circleR, imgSize]);
+
+  const getCanvasPos = useCallback(
+    (e: React.MouseEvent) => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return { x: 0, y: 0 };
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    },
+    []
+  );
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      const pos = getCanvasPos(e);
+      // Check if near resize handle
+      const handleAngle = Math.PI / 4;
+      const hx = circleX + circleR * Math.cos(handleAngle);
+      const hy = circleY + circleR * Math.sin(handleAngle);
+      const distToHandle = Math.sqrt((pos.x - hx) ** 2 + (pos.y - hy) ** 2);
+
+      if (distToHandle < 12) {
+        setDragging("resize");
+        dragStart.current = { x: pos.x, y: pos.y, cx: circleX, cy: circleY, cr: circleR };
+        return;
+      }
+      // Check if inside circle
+      const distToCenter = Math.sqrt((pos.x - circleX) ** 2 + (pos.y - circleY) ** 2);
+      if (distToCenter < circleR) {
+        setDragging("move");
+        dragStart.current = { x: pos.x, y: pos.y, cx: circleX, cy: circleY, cr: circleR };
+      }
+    },
+    [circleX, circleY, circleR, getCanvasPos]
+  );
+
+  const onMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!dragging) return;
+      const pos = getCanvasPos(e);
+      const dx = pos.x - dragStart.current.x;
+      const dy = pos.y - dragStart.current.y;
+
+      if (dragging === "move") {
+        let nx = dragStart.current.cx + dx;
+        let ny = dragStart.current.cy + dy;
+        // Clamp
+        nx = Math.max(circleR, Math.min(imgSize.w - circleR, nx));
+        ny = Math.max(circleR, Math.min(imgSize.h - circleR, ny));
+        setCircleX(nx);
+        setCircleY(ny);
+      } else if (dragging === "resize") {
+        const dist = Math.sqrt(
+          (pos.x - dragStart.current.cx) ** 2 + (pos.y - dragStart.current.cy) ** 2
+        );
+        const newR = Math.max(20, Math.min(
+          dist,
+          dragStart.current.cx,
+          imgSize.w - dragStart.current.cx,
+          dragStart.current.cy,
+          imgSize.h - dragStart.current.cy
+        ));
+        setCircleR(newR);
+      }
+    },
+    [dragging, getCanvasPos, imgSize, circleR]
+  );
+
+  const onMouseUp = useCallback(() => {
+    setDragging(null);
+  }, []);
+
+  const handleConfirm = useCallback(() => {
+    if (!imgRef.current || imgSize.w === 0) return;
+    const scale = imgSize.naturalW / imgSize.w;
+    const sx = (circleX - circleR) * scale;
+    const sy = (circleY - circleR) * scale;
+    const sd = circleR * 2 * scale;
+
+    const outputSize = 256;
+    const offscreen = document.createElement("canvas");
+    offscreen.width = outputSize;
+    offscreen.height = outputSize;
+    const ctx = offscreen.getContext("2d")!;
+
+    // Clip circle
+    ctx.beginPath();
+    ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.drawImage(imgRef.current, sx, sy, sd, sd, 0, 0, outputSize, outputSize);
+    onConfirm(offscreen.toDataURL("image/png"));
+  }, [circleX, circleY, circleR, imgSize, onConfirm]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="rounded-2xl bg-surface border border-black/10 shadow-xl p-5 flex flex-col items-center gap-4 max-w-[480px]">
+        <div className="text-lg font-semibold text-foreground">{titleLabel}</div>
+        <div
+          ref={containerRef}
+          className="relative select-none"
+          style={{ width: imgSize.w || 400, height: imgSize.h || 400 }}
+        >
+          <canvas
+            ref={canvasRef}
+            style={{ width: imgSize.w, height: imgSize.h, cursor: dragging ? "grabbing" : "grab" }}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+          />
+        </div>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-black/10 bg-background px-5 py-2 text-sm text-foreground/70 transition-colors hover:bg-black/5"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className="rounded-xl bg-primary px-5 py-2 text-sm text-white transition-colors hover:bg-primary/90"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Nickname Edit Dialog                                              */
+/* ------------------------------------------------------------------ */
+
+const NicknameEditDialog: React.FC<{
+  currentName: string;
+  onConfirm: (name: string) => void;
+  onCancel: () => void;
+  titleLabel: string;
+  placeholderLabel: string;
+  confirmLabel: string;
+  cancelLabel: string;
+}> = ({ currentName, onConfirm, onCancel, titleLabel, placeholderLabel, confirmLabel, cancelLabel }) => {
+  const [name, setName] = useState(currentName);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      const trimmed = name.trim();
+      if (trimmed.length > 0) {
+        onConfirm(trimmed);
+      }
+    },
+    [name, onConfirm]
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-2xl bg-surface border border-black/10 shadow-xl p-5 flex flex-col gap-4 min-w-[320px]"
+      >
+        <div className="text-lg font-semibold text-foreground">{titleLabel}</div>
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={30}
+          placeholder={placeholderLabel}
+          className="rounded-xl border border-black/10 bg-background px-4 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary"
+        />
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-black/10 bg-background px-5 py-2 text-sm text-foreground/70 transition-colors hover:bg-black/5"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="submit"
+            className="rounded-xl bg-primary px-5 py-2 text-sm text-white transition-colors hover:bg-primary/90"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Main SettingsView                                                 */
+/* ------------------------------------------------------------------ */
+
 const SettingsView: React.FC<SettingsViewProps> = ({
   language,
   theme,
@@ -97,30 +408,180 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const { languageOptions, t } = useI18n();
   const {
+    avatar,
+    displayName,
     newlineShortcut,
+    secondaryPassword,
     sendShortcut,
+    setAvatar,
+    setDisplayName,
+    setSecondaryPassword,
     setSendShortcut,
     setTextSize,
     textSize,
     toggleWindowShortcut
   } = useAppSettings();
-  const [activePanel, setActivePanel] = useState<"root" | "features">("root");
+  const [activePanel, setActivePanel] = useState<
+    "root" | "features" | "release-notes" | "secondary-password"
+  >("root");
   const selectedTextSizeIndex = TEXT_SIZE_OPTIONS.indexOf(textSize);
+
+  // Avatar states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+
+  // Nickname dialog state
+  const [showNicknameDialog, setShowNicknameDialog] = useState(false);
+  const [floatingNotice, setFloatingNotice] = useState<FloatingNotice | null>(null);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [nextPasswordInput, setNextPasswordInput] = useState("");
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [secondaryPasswordVerified, setSecondaryPasswordVerified] = useState(false);
+  const [secondaryPasswordError, setSecondaryPasswordError] = useState<string | null>(null);
+
+  const handleAvatarClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    // Reset so the same file can be selected again
+    e.target.value = "";
+  }, []);
+
+  const handleCropConfirm = useCallback(
+    (croppedDataUrl: string) => {
+      setAvatar(croppedDataUrl);
+      setCropImageSrc(null);
+    },
+    [setAvatar]
+  );
+
+  const handleCropCancel = useCallback(() => {
+    setCropImageSrc(null);
+  }, []);
+
+  const handleNicknameConfirm = useCallback(
+    (name: string) => {
+      setDisplayName(name);
+      setShowNicknameDialog(false);
+    },
+    [setDisplayName]
+  );
+
+  const handleNicknameCancel = useCallback(() => {
+    setShowNicknameDialog(false);
+  }, []);
+
+  const showFloatingMessage = useCallback((message: string, tone: FloatingNotice["tone"]) => {
+    setFloatingNotice({ message, tone });
+  }, []);
+
+  useEffect(() => {
+    if (!floatingNotice) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setFloatingNotice(null);
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [floatingNotice]);
+
+  const handleReviewNoticeClick = useCallback(() => {
+    showFloatingMessage(t("contentUnderReview"), "warning");
+  }, [showFloatingMessage, t]);
+
+  const resetSecondaryPasswordForm = useCallback(() => {
+    setCurrentPasswordInput("");
+    setNextPasswordInput("");
+    setConfirmPasswordInput("");
+    setSecondaryPasswordVerified(false);
+    setSecondaryPasswordError(null);
+  }, []);
+
+  const openSecondaryPasswordPanel = useCallback(() => {
+    resetSecondaryPasswordForm();
+    setActivePanel("secondary-password");
+  }, [resetSecondaryPasswordForm]);
+
+  const handleSecondaryPasswordVerify = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (currentPasswordInput !== secondaryPassword) {
+        setSecondaryPasswordError(t("secondaryPasswordInvalidCurrent"));
+        setSecondaryPasswordVerified(false);
+        return;
+      }
+
+      setSecondaryPasswordError(null);
+      setSecondaryPasswordVerified(true);
+    },
+    [currentPasswordInput, secondaryPassword, t]
+  );
+
+  const handleSecondaryPasswordSave = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!/^\d{4}$/.test(nextPasswordInput) || !/^\d{4}$/.test(confirmPasswordInput)) {
+        setSecondaryPasswordError(t("secondaryPasswordInvalidFormat"));
+        return;
+      }
+
+      if (nextPasswordInput !== confirmPasswordInput) {
+        setSecondaryPasswordError(t("secondaryPasswordMismatch"));
+        return;
+      }
+
+      setSecondaryPassword(nextPasswordInput);
+      resetSecondaryPasswordForm();
+      setActivePanel("root");
+      showFloatingMessage(t("secondaryPasswordSaved"), "success");
+    },
+    [
+      confirmPasswordInput,
+      nextPasswordInput,
+      resetSecondaryPasswordForm,
+      setSecondaryPassword,
+      showFloatingMessage,
+      t
+    ]
+  );
+
+  const releaseNotes: ReleaseNoteEntry[] = [
+    {
+      version: APP_VERSION,
+      highlights: [
+        t("releaseNote010Item1"),
+        t("releaseNote010Item2"),
+        t("releaseNote010Item3")
+      ]
+    }
+  ];
+
+  const renderPanelBackButton = (label: string, onClick: () => void) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={panelBackButtonClassName}
+    >
+      <ChevronLeft className="h-4 w-4" />
+      <span>{label}</span>
+    </button>
+  );
 
   const featureSettingsContent = (
     <div className="space-y-4">
-      <button
-        type="button"
-        onClick={() => setActivePanel("root")}
-        className="inline-flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-foreground/60 transition-colors hover:bg-black/5 hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        <span>{t("settingsPreferences")}</span>
-      </button>
-
-      <div className="px-2 text-sm text-foreground/55">
-        {t("settingsFeatureSettings")}
-      </div>
+      {renderPanelBackButton(t("settingsFeatureSettings"), () => setActivePanel("root"))}
 
       <FeatureCard
         title={t("featureTextSizeTitle")}
@@ -164,20 +625,27 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           ))}
         </div>
 
-        <div className="mt-3 grid grid-cols-7 text-center text-foreground/65">
-          {TEXT_SIZE_OPTIONS.map((option) => (
-            <div
-              key={`label-${option}`}
-              style={
-                option === 12 || option === 16 || option === 24
-                  ? { fontSize: `${option}px`, lineHeight: 1.2 }
-                  : undefined
-              }
-            >
-              {option === 12 && t("featureTextSizeMin")}
-              {option === 16 && t("featureTextSizeStandard")}
-              {option === 24 && t("featureTextSizeMax")}
-            </div>
+        <div className="mt-3 flex items-start text-foreground/65">
+          {TEXT_SIZE_OPTIONS.map((option, index) => (
+            <React.Fragment key={`label-${option}`}>
+              <div
+                className="flex w-7 shrink-0 justify-center"
+                style={
+                  option === 12 || option === 16 || option === 24
+                    ? { fontSize: `${option}px`, lineHeight: 1.2 }
+                    : undefined
+                }
+              >
+                <span className="whitespace-nowrap">
+                  {option === 12 && t("featureTextSizeMin")}
+                  {option === 16 && t("featureTextSizeStandard")}
+                  {option === 24 && t("featureTextSizeMax")}
+                </span>
+              </div>
+              {index < TEXT_SIZE_OPTIONS.length - 1 && (
+                <div className="flex-1" />
+              )}
+            </React.Fragment>
           ))}
         </div>
       </FeatureCard>
@@ -231,6 +699,144 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     </div>
   );
 
+  const releaseNotesContent = (
+    <div className="space-y-4">
+      {renderPanelBackButton(t("settingsReleaseNotes"), () => setActivePanel("root"))}
+
+      <div className="rounded-[28px] border border-black/5 bg-surface/95 px-5 py-5 shadow-sm">
+        <div className="space-y-4">
+          {releaseNotes.map((note) => (
+            <div
+              key={note.version}
+              className="rounded-3xl border border-black/5 bg-background px-5 py-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-lg font-semibold text-foreground">
+                  v{note.version}
+                </div>
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  {t("settingsReleaseNotes")}
+                </span>
+              </div>
+
+              <ul className="mt-4 space-y-2 text-sm leading-6 text-foreground/70">
+                {note.highlights.map((item) => (
+                  <li key={item} className="flex gap-3">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const secondaryPasswordContent = (
+    <div className="space-y-4">
+      {renderPanelBackButton(t("settingsSecondaryPassword"), () => {
+        resetSecondaryPasswordForm();
+        setActivePanel("root");
+      })}
+
+      <div className="rounded-[28px] border border-black/5 bg-surface/95 px-5 py-5 shadow-sm">
+        <div className="mb-4 text-sm text-primary/80">
+          {t("secondaryPasswordHint")}
+        </div>
+
+        <form
+          onSubmit={
+            secondaryPasswordVerified
+              ? handleSecondaryPasswordSave
+              : handleSecondaryPasswordVerify
+          }
+          className="space-y-4"
+        >
+          <label className="block">
+            <div className="mb-2 text-sm text-foreground/70">
+              {t("secondaryPasswordCurrent")}
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              value={currentPasswordInput}
+              onChange={(event) =>
+                setCurrentPasswordInput(event.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              placeholder="0000"
+              className="w-full rounded-2xl border border-black/10 bg-background px-4 py-3 text-sm tracking-[0.35em] text-foreground outline-none transition-colors focus:border-primary"
+            />
+          </label>
+
+          {secondaryPasswordVerified && (
+            <>
+              <div className="rounded-2xl bg-primary/8 px-4 py-3 text-sm text-primary">
+                {t("secondaryPasswordVerified")}
+              </div>
+
+              <label className="block">
+                <div className="mb-2 text-sm text-foreground/70">
+                  {t("secondaryPasswordNew")}
+                </div>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  value={nextPasswordInput}
+                  onChange={(event) =>
+                    setNextPasswordInput(event.target.value.replace(/\D/g, "").slice(0, 4))
+                  }
+                  placeholder="0000"
+                  className="w-full rounded-2xl border border-black/10 bg-background px-4 py-3 text-sm tracking-[0.35em] text-foreground outline-none transition-colors focus:border-primary"
+                />
+              </label>
+
+              <label className="block">
+                <div className="mb-2 text-sm text-foreground/70">
+                  {t("secondaryPasswordConfirm")}
+                </div>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  value={confirmPasswordInput}
+                  onChange={(event) =>
+                    setConfirmPasswordInput(event.target.value.replace(/\D/g, "").slice(0, 4))
+                  }
+                  placeholder="0000"
+                  className="w-full rounded-2xl border border-black/10 bg-background px-4 py-3 text-sm tracking-[0.35em] text-foreground outline-none transition-colors focus:border-primary"
+                />
+              </label>
+            </>
+          )}
+
+          {secondaryPasswordError && (
+            <div className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-500">
+              {secondaryPasswordError}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="rounded-2xl bg-primary px-5 py-2.5 text-sm text-white transition-colors hover:bg-primary/90"
+            >
+              {secondaryPasswordVerified
+                ? t("secondaryPasswordSave")
+                : t("secondaryPasswordNext")}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
   const sections: SettingSection[] = [
     {
       id: "account",
@@ -242,19 +848,55 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           label: t("settingsAvatar"),
           trailing: (
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-lg shadow-sm">
-                🧠
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-foreground/45">Knight.</div>
-              </div>
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".png,.jpg,.jpeg"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              {/* Avatar circle with hover overlay */}
+              <button
+                type="button"
+                onClick={handleAvatarClick}
+                className="group relative flex h-12 w-12 items-center justify-center rounded-full border border-primary/15 bg-primary/10 shadow-sm overflow-hidden"
+              >
+                {avatar ? (
+                  <img
+                    src={avatar}
+                    alt="avatar"
+                    className="h-full w-full object-cover rounded-full"
+                  />
+                ) : (
+                  <span className="text-lg">🧠</span>
+                )}
+                {/* Hover overlay with camera icon */}
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                  <Camera className="h-5 w-5 text-white/90" />
+                </span>
+              </button>
             </div>
           )
         },
         {
           id: "display-name",
           icon: BadgeInfo,
-          label: t("settingsDisplayName")
+          label: t("settingsDisplayName"),
+          trailing: (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-foreground/60 max-w-[180px] truncate">
+                {displayName}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowNicknameDialog(true)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-foreground/40 transition-colors hover:bg-black/5 hover:text-foreground/70"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )
         }
       ]
     },
@@ -284,11 +926,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           icon: Settings2,
           label: t("settingsFeatureSettings"),
           onClick: () => setActivePanel("features")
-        },
-        {
-          id: "language-resources",
-          icon: Languages,
-          label: t("settingsLanguageResources")
         },
         {
           id: "language",
@@ -366,13 +1003,38 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         {
           id: "release-notes",
           icon: CircleDot,
-          label: t("settingsReleaseNotes")
+          label: t("settingsReleaseNotes"),
+          onClick: () => setActivePanel("release-notes")
         },
         {
           id: "version",
           icon: BadgeInfo,
           label: t("settingsVersion"),
-          trailing: <span className="text-sm text-rose-500">0.1.0</span>
+          trailing: <span className="text-sm text-rose-500">{APP_VERSION}</span>
+        }
+      ]
+    },
+    {
+      id: "privacy-security",
+      title: t("settingsPrivacySecurity"),
+      rows: [
+        {
+          id: "user-notice",
+          icon: BadgeInfo,
+          label: t("settingsUserNotice"),
+          onClick: handleReviewNoticeClick
+        },
+        {
+          id: "privacy-policy",
+          icon: FileText,
+          label: t("settingsPrivacyPolicy"),
+          onClick: handleReviewNoticeClick
+        },
+        {
+          id: "secondary-password",
+          icon: ShieldCheck,
+          label: t("settingsSecondaryPassword"),
+          onClick: openSecondaryPasswordPanel
         }
       ]
     }
@@ -380,9 +1042,34 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-5">
+      {floatingNotice && (
+        <div className="pointer-events-none fixed left-1/2 top-6 z-40 -translate-x-1/2">
+          <div
+            className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm shadow-lg ${
+              floatingNotice.tone === "warning"
+                ? "bg-[#F4C63D] text-white"
+                : "bg-emerald-500 text-white"
+            }`}
+          >
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
+              {floatingNotice.tone === "warning" ? (
+                <CircleAlert className="h-4 w-4" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+            </span>
+            <span className="whitespace-nowrap">{floatingNotice.message}</span>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-4xl">
         {activePanel === "features" ? (
           featureSettingsContent
+        ) : activePanel === "release-notes" ? (
+          releaseNotesContent
+        ) : activePanel === "secondary-password" ? (
+          secondaryPasswordContent
         ) : (
           sections.map((section) => (
             <section key={section.id} className="mb-5 last:mb-0">
@@ -443,6 +1130,31 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           ))
         )}
       </div>
+
+      {/* Avatar Crop Dialog */}
+      {cropImageSrc && (
+        <AvatarCropDialog
+          imageSrc={cropImageSrc}
+          onConfirm={handleCropConfirm}
+          onCancel={handleCropCancel}
+          titleLabel={t("avatarCropTitle")}
+          confirmLabel={t("avatarCropConfirm")}
+          cancelLabel={t("avatarCropCancel")}
+        />
+      )}
+
+      {/* Nickname Edit Dialog */}
+      {showNicknameDialog && (
+        <NicknameEditDialog
+          currentName={displayName}
+          onConfirm={handleNicknameConfirm}
+          onCancel={handleNicknameCancel}
+          titleLabel={t("editNicknameTitle")}
+          placeholderLabel={t("editNicknamePlaceholder")}
+          confirmLabel={t("editNicknameConfirm")}
+          cancelLabel={t("editNicknameCancel")}
+        />
+      )}
     </div>
   );
 };
