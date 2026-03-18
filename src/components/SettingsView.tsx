@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   BadgeInfo,
   Camera,
@@ -58,6 +59,7 @@ interface ReleaseNoteEntry {
 }
 
 const APP_VERSION = "0.1.0";
+const ABOUT_PAGE_URL = "https://snippetbutler.com/";
 
 const panelBackButtonClassName =
   "inline-flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-foreground/60 transition-colors hover:bg-black/5 hover:text-foreground";
@@ -497,6 +499,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleReviewNoticeClick = useCallback(() => {
     showFloatingMessage(t("contentUnderReview"), "warning");
+  }, [showFloatingMessage, t]);
+
+  const handleAboutClick = useCallback(() => {
+    void invoke("open_external_url", { url: ABOUT_PAGE_URL }).catch((error) => {
+      console.error("Failed to open about page", error);
+    });
+  }, []);
+
+  const handleFeedbackClick = useCallback(() => {
+    showFloatingMessage(t("feedbackChannelBuilding"), "warning");
   }, [showFloatingMessage, t]);
 
   const resetSecondaryPasswordForm = useCallback(() => {
@@ -987,12 +999,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         {
           id: "about",
           icon: Info,
-          label: t("settingsAbout")
+          label: t("settingsAbout"),
+          onClick: handleAboutClick
         },
         {
           id: "feedback",
           icon: MessageSquareMore,
-          label: t("settingsFeedback")
+          label: t("settingsFeedback"),
+          onClick: handleFeedbackClick
         }
       ]
     },

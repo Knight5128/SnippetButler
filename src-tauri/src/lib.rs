@@ -4,6 +4,7 @@ use sqlx::{
     Row, SqlitePool,
 };
 use std::fs;
+use std::process::Command;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -253,6 +254,37 @@ async fn upsert_tag(state: State<'_, AppState>, tag: Tag) -> Result<(), String> 
     Ok(())
 }
 
+#[tauri::command]
+async fn open_external_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("unsupported url scheme".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut cmd = Command::new("cmd");
+        cmd.args(["/C", "start", "", &url]);
+        cmd
+    };
+
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut cmd = Command::new("open");
+        cmd.arg(&url);
+        cmd
+    };
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = {
+        let mut cmd = Command::new("xdg-open");
+        cmd.arg(&url);
+        cmd
+    };
+
+    command.spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn toggle_main_window(app: &AppHandle) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Ok(());
@@ -365,6 +397,7 @@ pub fn create_builder() -> tauri::Builder<tauri::Wry> {
             upsert_folder,
             delete_folder,
             list_tags,
-            upsert_tag
+            upsert_tag,
+            open_external_url
         ])
 }
