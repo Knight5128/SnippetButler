@@ -20,6 +20,9 @@ const DiscoveryView: React.FC<DiscoveryViewProps> = ({ activeSection }) => {
   const folders = useSnippetStore((state) => state.folders);
   const tags = useSnippetStore((state) => state.tags);
   const { t } = useI18n();
+  const activeSnippetCount = snippets.filter(
+    (snippet) => !snippet.isArchived && snippet.deletedAt === null
+  ).length;
 
   if (activeSection === "books") {
     return (
@@ -67,7 +70,7 @@ const DiscoveryView: React.FC<DiscoveryViewProps> = ({ activeSection }) => {
   const stats = [
     {
       label: t("statSnippets"),
-      value: snippets.length,
+      value: activeSnippetCount,
       icon: NotebookTabs
     },
     {

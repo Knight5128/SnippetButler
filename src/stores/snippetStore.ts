@@ -14,6 +14,7 @@ import {
 } from "../utils/db";
 
 export type FilterMode = "all" | "todo" | "favorite";
+const ARCHIVE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface SnippetState {
   snippets: Snippet[];
@@ -29,7 +30,11 @@ interface SnippetState {
   setActiveFolderId: (id: string | null) => void;
   addSnippetFromText: (content: string) => Promise<void>;
   updateSnippet: (snippet: Snippet) => Promise<void>;
+  archiveSnippet: (id: string) => Promise<void>;
+  unarchiveSnippet: (id: string) => Promise<void>;
   deleteSnippet: (id: string) => Promise<void>;
+  restoreSnippet: (id: string) => Promise<void>;
+  permanentlyDeleteSnippet: (id: string) => Promise<void>;
   toggleFlag: (id: string, key: "isPinned" | "isFavorite" | "isTodo" | "isDone") => Promise<void>;
   createFolder: (name: string) => Promise<void>;
   createTag: (name: string) => Promise<void>;
@@ -58,6 +63,29 @@ function mergeTags(existingTags: Tag[], tagNames: string[]): Tag[] {
   return additions.length > 0 ? [...existingTags, ...additions] : existingTags;
 }
 
+function normalizeSnippetLifecycle(snippet: Snippet): Snippet {
+  if (snippet.deletedAt !== null) {
+    return {
+      ...snippet,
+      isArchived: false,
+      archivedAt: null
+    };
+  }
+
+  if (snippet.isArchived) {
+    return {
+      ...snippet,
+      archivedAt: snippet.archivedAt ?? snippet.updatedAt
+    };
+  }
+
+  return {
+    ...snippet,
+    archivedAt: null,
+    deletedAt: null
+  };
+}
+
 export const useSnippetStore = create<SnippetState>((set, get) => ({
   snippets: [],
   folders: [],
@@ -74,7 +102,29 @@ export const useSnippetStore = create<SnippetState>((set, get) => ({
       fetchFolders(),
       fetchTags()
     ]);
-    set({ snippets, folders, tags, loading: false });
+    const now = Date.now();
+    const expiredArchivedIds = snippets
+      .filter(
+        (snippet) =>
+          snippet.isArchived &&
+          snippet.deletedAt === null &&
+          snippet.archivedAt !== null &&
+          now - snippet.archivedAt >= ARCHIVE_RETENTION_MS
+      )
+      .map((snippet) => snippet.id);
+
+    if (expiredArchivedIds.length > 0) {
+      await Promise.all(expiredArchivedIds.map((id) => removeSnippet(id)));
+    }
+
+    set({
+      snippets: snippets
+        .filter((snippet) => !expiredArchivedIds.includes(snippet.id))
+        .map(normalizeSnippetLifecycle),
+      folders,
+      tags,
+      loading: false
+    });
   },
 
   setFilterMode: (mode) => set({ filterMode: mode }),
@@ -94,6 +144,8 @@ export const useSnippetStore = create<SnippetState>((set, get) => ({
       isTodo: false,
       isDone: false,
       isArchived: false,
+      archivedAt: null,
+      deletedAt: null,
       createdAt: now,
       updatedAt: now
     };
@@ -107,7 +159,11 @@ export const useSnippetStore = create<SnippetState>((set, get) => ({
 
   updateSnippet: async (snippet) => {
     const tags = extractTags(snippet.content);
-    const updated: Snippet = { ...snippet, tags, updatedAt: Date.now() };
+    const updated = normalizeSnippetLifecycle({
+      ...snippet,
+      tags,
+      updatedAt: Date.now()
+    });
     await saveSnippet(updated);
     set((state) => ({
       snippets: state.snippets.map((s) => (s.id === updated.id ? updated : s)),
@@ -115,7 +171,77 @@ export const useSnippetStore = create<SnippetState>((set, get) => ({
     }));
   },
 
+  archiveSnippet: async (id) => {
+    const target = get().snippets.find((s) => s.id === id);
+    if (!target) return;
+
+    const updated = normalizeSnippetLifecycle({
+      ...target,
+      isArchived: true,
+      archivedAt: Date.now(),
+      deletedAt: null,
+      updatedAt: Date.now()
+    });
+
+    await saveSnippet(updated);
+    set((state) => ({
+      snippets: state.snippets.map((s) => (s.id === id ? updated : s))
+    }));
+  },
+
+  unarchiveSnippet: async (id) => {
+    const target = get().snippets.find((s) => s.id === id);
+    if (!target) return;
+
+    const updated = normalizeSnippetLifecycle({
+      ...target,
+      isArchived: false,
+      archivedAt: null,
+      deletedAt: null,
+      updatedAt: Date.now()
+    });
+
+    await saveSnippet(updated);
+    set((state) => ({
+      snippets: state.snippets.map((s) => (s.id === id ? updated : s))
+    }));
+  },
+
   deleteSnippet: async (id) => {
+    const target = get().snippets.find((s) => s.id === id);
+    if (!target) return;
+
+    const updated = normalizeSnippetLifecycle({
+      ...target,
+      isArchived: false,
+      deletedAt: Date.now(),
+      updatedAt: Date.now()
+    });
+
+    await saveSnippet(updated);
+    set((state) => ({
+      snippets: state.snippets.map((s) => (s.id === id ? updated : s))
+    }));
+  },
+
+  restoreSnippet: async (id) => {
+    const target = get().snippets.find((s) => s.id === id);
+    if (!target) return;
+
+    const updated = normalizeSnippetLifecycle({
+      ...target,
+      isArchived: false,
+      deletedAt: null,
+      updatedAt: Date.now()
+    });
+
+    await saveSnippet(updated);
+    set((state) => ({
+      snippets: state.snippets.map((s) => (s.id === id ? updated : s))
+    }));
+  },
+
+  permanentlyDeleteSnippet: async (id) => {
     await removeSnippet(id);
     set((state) => ({
       snippets: state.snippets.filter((s) => s.id !== id)

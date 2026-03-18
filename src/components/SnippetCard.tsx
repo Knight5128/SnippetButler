@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  Archive,
   CheckSquare,
   Ellipsis,
   Pin,
@@ -18,7 +19,8 @@ interface SnippetCardProps {
 }
 
 const SnippetCard: React.FC<SnippetCardProps> = ({ snippet }) => {
-  const { toggleFlag, deleteSnippet, updateSnippet } = useSnippetStore();
+  const { archiveSnippet, toggleFlag, deleteSnippet, updateSnippet } =
+    useSnippetStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(snippet.content);
@@ -119,6 +121,17 @@ const SnippetCard: React.FC<SnippetCardProps> = ({ snippet }) => {
               >
                 <ClipboardCopy className="h-3 w-3" />
                 <span>{t("snippetCopyMarkdown")}</span>
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 transition-colors hover:bg-primary/10"
+                onClick={async () => {
+                  await archiveSnippet(snippet.id);
+                  setMenuOpen(false);
+                }}
+              >
+                <Archive className="h-3 w-3" />
+                <span>{t("snippetArchive")}</span>
               </button>
               <button
                 type="button"

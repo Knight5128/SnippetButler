@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import {
   BadgeInfo,
   Camera,
@@ -71,7 +72,7 @@ interface ExportNotesResult {
   exported_at: number;
 }
 
-const APP_VERSION = "0.1.0";
+const DEFAULT_APP_VERSION = "0.2.0";
 const ABOUT_PAGE_URL = "https://snippetbutler.com/";
 
 const panelBackButtonClassName =
@@ -522,6 +523,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   >("completed");
   const [isExporting, setIsExporting] = useState(false);
   const [lastExportResult, setLastExportResult] = useState<ExportNotesResult | null>(null);
+  const [appVersion, setAppVersion] = useState(DEFAULT_APP_VERSION);
 
   const handleAvatarClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -578,6 +580,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       window.clearTimeout(timer);
     };
   }, [floatingNotice]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getVersion()
+      .then((version) => {
+        if (!cancelled) {
+          setAppVersion(version);
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to read app version", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleReviewNoticeClick = useCallback(() => {
     showFloatingMessage(t("contentUnderReview"), "warning");
@@ -679,7 +699,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
   const releaseNotes: ReleaseNoteEntry[] = [
     {
-      version: APP_VERSION,
+      version: appVersion,
+      highlights: [
+        t("releaseNote020Item1"),
+        t("releaseNote020Item2"),
+        t("releaseNote020Item3")
+      ]
+    },
+    {
+      version: "0.1.0",
       highlights: [
         t("releaseNote010Item1"),
         t("releaseNote010Item2"),
@@ -1312,7 +1340,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           id: "version",
           icon: BadgeInfo,
           label: t("settingsVersion"),
-          trailing: <span className="text-sm text-rose-500">{APP_VERSION}</span>
+          trailing: <span className="text-sm text-rose-500">{appVersion}</span>
         }
       ]
     },

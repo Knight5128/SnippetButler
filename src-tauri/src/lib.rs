@@ -21,6 +21,8 @@ pub struct Snippet {
     pub is_todo: bool,
     pub is_done: bool,
     pub is_archived: bool,
+    pub archived_at: Option<i64>,
+    pub deleted_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -94,6 +96,32 @@ async fn seed_tags_from_existing_snippets(pool: &SqlitePool) -> Result<(), Strin
         let tags: String = row.get("tags");
         let created_at: i64 = row.get("created_at");
         ensure_tags_exist(pool, &tags, created_at).await?;
+    }
+
+    Ok(())
+}
+
+async fn ensure_snippets_column_exists(
+    pool: &SqlitePool,
+    column_name: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let rows = sqlx::query("PRAGMA table_info(snippets)")
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let column_exists = rows
+        .iter()
+        .any(|row| row.get::<String, _>("name") == column_name);
+
+    if !column_exists {
+        sqlx::query(&format!(
+            "ALTER TABLE snippets ADD COLUMN {column_name} {definition}"
+        ))
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -507,10 +535,10 @@ async fn list_snippets(state: State<'_, AppState>) -> Result<Vec<Snippet>, Strin
         r#"
         SELECT id, content, tags, folder_id,
                is_pinned, is_favorite, is_todo, is_done, is_archived,
+               archived_at, deleted_at,
                created_at, updated_at
         FROM snippets
-        WHERE is_archived = 0
-        ORDER BY is_pinned DESC, created_at DESC
+        ORDER BY updated_at DESC
         "#,
     )
     .fetch_all(&state.pool)
@@ -529,6 +557,8 @@ async fn list_snippets(state: State<'_, AppState>) -> Result<Vec<Snippet>, Strin
             is_todo: r.get::<i64, _>("is_todo") != 0,
             is_done: r.get::<i64, _>("is_done") != 0,
             is_archived: r.get::<i64, _>("is_archived") != 0,
+            archived_at: r.get("archived_at"),
+            deleted_at: r.get("deleted_at"),
             created_at: r.get("created_at"),
             updated_at: r.get("updated_at"),
         })
@@ -541,9 +571,9 @@ async fn upsert_snippet(state: State<'_, AppState>, snippet: Snippet) -> Result<
         r#"
         INSERT INTO snippets
           (id, content, tags, folder_id, is_pinned, is_favorite, is_todo,
-           is_done, is_archived, created_at, updated_at)
+           is_done, is_archived, archived_at, deleted_at, created_at, updated_at)
         VALUES
-          (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+          (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
         ON CONFLICT(id) DO UPDATE SET
           content = excluded.content,
           tags = excluded.tags,
@@ -553,6 +583,8 @@ async fn upsert_snippet(state: State<'_, AppState>, snippet: Snippet) -> Result<
           is_todo = excluded.is_todo,
           is_done = excluded.is_done,
           is_archived = excluded.is_archived,
+          archived_at = excluded.archived_at,
+          deleted_at = excluded.deleted_at,
           updated_at = excluded.updated_at
         "#,
     )
@@ -565,6 +597,8 @@ async fn upsert_snippet(state: State<'_, AppState>, snippet: Snippet) -> Result<
     .bind(snippet.is_todo as i64)
     .bind(snippet.is_done as i64)
     .bind(snippet.is_archived as i64)
+    .bind(snippet.archived_at)
+    .bind(snippet.deleted_at)
     .bind(snippet.created_at)
     .bind(snippet.updated_at)
     .execute(&state.pool)
@@ -709,8 +743,10 @@ async fn export_notes_as_html(
         r#"
         SELECT id, content, tags, folder_id,
                is_pinned, is_favorite, is_todo, is_done, is_archived,
+               archived_at, deleted_at,
                created_at, updated_at
         FROM snippets
+        WHERE deleted_at IS NULL
         ORDER BY is_archived ASC, is_pinned DESC, created_at DESC
         "#,
     )
@@ -729,6 +765,8 @@ async fn export_notes_as_html(
             is_todo: r.get::<i64, _>("is_todo") != 0,
             is_done: r.get::<i64, _>("is_done") != 0,
             is_archived: r.get::<i64, _>("is_archived") != 0,
+            archived_at: r.get("archived_at"),
+            deleted_at: r.get("deleted_at"),
             created_at: r.get("created_at"),
             updated_at: r.get("updated_at"),
         })
@@ -859,6 +897,22 @@ pub fn create_builder() -> tauri::Builder<tauri::Wry> {
                       updated_at INTEGER NOT NULL,
                       FOREIGN KEY(folder_id) REFERENCES folders(id)
                     )
+                    "#,
+                )
+                .execute(&pool)
+                .await
+                .map_err(|e| e.to_string())?;
+
+                ensure_snippets_column_exists(&pool, "archived_at", "INTEGER")
+                    .await?;
+                ensure_snippets_column_exists(&pool, "deleted_at", "INTEGER")
+                    .await?;
+
+                sqlx::query(
+                    r#"
+                    UPDATE snippets
+                    SET archived_at = updated_at
+                    WHERE is_archived = 1 AND archived_at IS NULL
                     "#,
                 )
                 .execute(&pool)

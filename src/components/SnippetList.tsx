@@ -12,7 +12,7 @@ const SnippetList: React.FC<SnippetListProps> = ({ search }) => {
   const { t } = useI18n();
 
   const filtered = useMemo(() => {
-    let list = snippets;
+    let list = snippets.filter((s) => !s.isArchived && s.deletedAt === null);
 
     if (filterMode === "todo") {
       list = list.filter((s) => s.isTodo && !s.isDone);

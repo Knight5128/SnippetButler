@@ -11,6 +11,8 @@ interface RawSnippet {
   is_todo: boolean;
   is_done: boolean;
   is_archived: boolean;
+  archived_at: number | null;
+  deleted_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -38,6 +40,8 @@ export async function fetchSnippets(): Promise<Snippet[]> {
     isTodo: s.is_todo,
     isDone: s.is_done,
     isArchived: s.is_archived,
+    archivedAt: s.archived_at,
+    deletedAt: s.deleted_at,
     createdAt: s.created_at,
     updatedAt: s.updated_at
   }));
@@ -54,6 +58,8 @@ export async function saveSnippet(snippet: Snippet): Promise<void> {
     is_todo: snippet.isTodo,
     is_done: snippet.isDone,
     is_archived: snippet.isArchived,
+    archived_at: snippet.archivedAt,
+    deleted_at: snippet.deletedAt,
     created_at: snippet.createdAt,
     updated_at: snippet.updatedAt
   };

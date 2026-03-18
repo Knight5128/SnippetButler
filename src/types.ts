@@ -8,6 +8,8 @@ export interface Snippet {
   isTodo: boolean;
   isDone: boolean;
   isArchived: boolean;
+  archivedAt: number | null;
+  deletedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }

@@ -67,13 +67,13 @@ const translations = {
     archiveNotice:
       "Items in Archive will be deleted automatically after 30 days.",
     recycleNotice:
-      "Recycle Bin is currently a front-end placeholder. Restore and permanent delete actions can be connected next.",
+      "Restore items you still need, or permanently delete them from the recycle bin.",
     emptyArchivedTitle: "No archived snippets yet",
     emptyRecycleTitle: "Recycle Bin is empty",
     emptyArchivedDescription:
-      "There are no snippets marked as archived yet. The page styling is ready, and the real archive flow can be connected next.",
+      "There are no archived snippets right now. Once a snippet is archived, it will stay here until the 30-day retention period ends.",
     emptyRecycleDescription:
-      "This remains a placeholder page for now. Restore, bulk cleanup, and automatic expiration can be added later.",
+      "Deleted snippets will appear here. You can restore them or permanently delete them at any time.",
     settingsAccount: "Account",
     settingsAvatar: "Avatar",
     settingsDisplayName: "Display Name",
@@ -110,6 +110,12 @@ const translations = {
     themeDark: "Dark",
     contentUnderReview: "Content under review",
     feedbackChannelBuilding: "Feedback channel under construction",
+    releaseNote020Item1:
+      "Completed the core snippet workflow with folders, tags, favorites, todos, archive, and recycle bin support.",
+    releaseNote020Item2:
+      "Added discovery, import/export entry points, and a richer settings center for profile, language, theme, text size, and secondary password.",
+    releaseNote020Item3:
+      "Prepared the desktop app for packaged distribution and the upcoming official download experience.",
     releaseNote010Item1: "Completed the first settings page layout and multi-language support.",
     releaseNote010Item2: "Added account customization, theme switching, and text size adjustment.",
     releaseNote010Item3: "Reserved entry points for feature settings, feedback, and follow-up updates.",
@@ -129,7 +135,12 @@ const translations = {
     snippetEdit: "Edit",
     snippetCopy: "Copy",
     snippetCopyMarkdown: "Copy Markdown",
+    snippetArchive: "Archive",
     snippetDelete: "Delete",
+    archiveCancel: "Unarchive",
+    archiveRestore: "Restore",
+    archiveDeletePermanently: "Delete Permanently",
+    archiveActionSuccess: "Operation succeeded",
     snippetCancel: "Cancel",
     snippetSave: "Save",
     loadingSnippets: "Loading snippets...",
@@ -223,13 +234,13 @@ const translations = {
     archiveTabRecycleBin: "回收站",
     archiveNotice: "归档内的内容将在 30 天后自动删除",
     recycleNotice:
-      "回收站内容当前仅实现前端页面，后续接入恢复与彻底删除逻辑",
+      "回收站中的内容可随时恢复，也可以选择彻底删除。",
     emptyArchivedTitle: "暂无已归档内容",
     emptyRecycleTitle: "回收站还是空的",
     emptyArchivedDescription:
-      "当前还没有被标记为归档的片段。此页面样式已就绪，后续可以接入真实归档流程。",
+      "当前还没有归档中的片段。片段进入归档后，会在 30 天到期前一直保留在这里。",
     emptyRecycleDescription:
-      "这里先保留为前端占位页，后续可接入恢复、批量清理和到期自动删除。",
+      "删除后的片段会出现在这里，你可以随时将它恢复，或选择彻底删除。",
     settingsAccount: "账号设置",
     settingsAvatar: "头像",
     settingsDisplayName: "昵称",
@@ -265,9 +276,15 @@ const translations = {
     themeDark: "深色",
     contentUnderReview: "内容审核中",
     feedbackChannelBuilding: "反馈通道建设中",
-    releaseNote010Item1: "完成首版设置页结构与多语言支持。",
+    releaseNote020Item1:
+      "完成片段管理主流程，支持文件夹、标签、收藏、待办、归档与回收站。",
+    releaseNote020Item2:
+      "新增发现页、导入/导出入口，以及更完整的设置中心，覆盖头像昵称、语言、主题、字号与二级密码。",
+    releaseNote020Item3:
+      "完成桌面端发版前整理，为安装包分发与官网下载安装体验做好准备。",
+    releaseNote010Item1: "完成设置页结构与多语言支持。",
     releaseNote010Item2: "加入账号自定义、主题切换与文本大小调节能力。",
-    releaseNote010Item3: "预留功能设置、反馈入口与后续版本更新承接区域。",
+    releaseNote010Item3: "预留了后续版本更新的承接区域。",
     secondaryPasswordCurrent: "旧密码",
     secondaryPasswordNew: "新的四位数密码",
     secondaryPasswordConfirm: "再次输入新密码",
@@ -284,7 +301,12 @@ const translations = {
     snippetEdit: "编辑",
     snippetCopy: "复制",
     snippetCopyMarkdown: "复制 Markdown",
+    snippetArchive: "归档",
     snippetDelete: "删除",
+    archiveCancel: "取消归档",
+    archiveRestore: "恢复",
+    archiveDeletePermanently: "彻底删除",
+    archiveActionSuccess: "操作成功",
     snippetCancel: "取消",
     snippetSave: "保存",
     loadingSnippets: "正在加载片段...",
@@ -381,13 +403,13 @@ const translations = {
     archiveNotice:
       "アーカイブ内の項目は 30 日後に自動削除されます。",
     recycleNotice:
-      "ごみ箱は現在フロントエンドのプレースホルダーです。復元と完全削除は今後接続できます。",
+      "必要な項目は復元し、不要な項目はごみ箱から完全に削除できます。",
     emptyArchivedTitle: "アーカイブ済みのスニペットはありません",
     emptyRecycleTitle: "ごみ箱は空です",
     emptyArchivedDescription:
-      "まだアーカイブ済みのスニペットはありません。このページの UI は準備できており、次に実際のアーカイブフローを接続できます。",
+      "現在アーカイブ中のスニペットはありません。アーカイブされた項目は 30 日の保持期限が切れるまでここに残ります。",
     emptyRecycleDescription:
-      "このページは今のところプレースホルダーです。復元、一括整理、自動期限切れは後で追加できます。",
+      "削除したスニペットはここに表示されます。いつでも復元するか完全削除できます。",
     settingsAccount: "アカウント",
     settingsAvatar: "アバター",
     settingsDisplayName: "表示名",
@@ -424,6 +446,12 @@ const translations = {
     themeDark: "ダーク",
     contentUnderReview: "内容は審査中です",
     feedbackChannelBuilding: "フィードバック窓口を準備中です",
+    releaseNote020Item1:
+      "フォルダー、タグ、お気に入り、ToDo、アーカイブ、ごみ箱を含むスニペット管理の主要フローを整えました。",
+    releaseNote020Item2:
+      "発見ページ、インポート/エクスポート入口、そしてプロフィール、言語、テーマ、文字サイズ、二次パスワードを扱える設定センターを追加しました。",
+    releaseNote020Item3:
+      "デスクトップ版の配布準備を進め、公式ダウンロード導線へつなげる土台を整えました。",
     releaseNote010Item1: "初期設定ページの構成と多言語対応を完成しました。",
     releaseNote010Item2: "アカウントのカスタマイズ、テーマ切り替え、文字サイズ調整を追加しました。",
     releaseNote010Item3: "機能設定、フィードバック、今後の更新を受け止める導線を用意しました。",
@@ -444,7 +472,12 @@ const translations = {
     snippetEdit: "編集",
     snippetCopy: "コピー",
     snippetCopyMarkdown: "Markdown をコピー",
+    snippetArchive: "アーカイブ",
     snippetDelete: "削除",
+    archiveCancel: "アーカイブ解除",
+    archiveRestore: "復元",
+    archiveDeletePermanently: "完全に削除",
+    archiveActionSuccess: "操作成功",
     snippetCancel: "キャンセル",
     snippetSave: "保存",
     loadingSnippets: "スニペットを読み込み中...",

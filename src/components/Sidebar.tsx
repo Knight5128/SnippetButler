@@ -30,17 +30,22 @@ const Sidebar: React.FC<SidebarProps> = ({ search, onSearchChange }) => {
     createTag
   } = useSnippetStore();
 
-  const allCount = snippets.length;
-  const todoCount = snippets.filter((s) => s.isTodo && !s.isDone).length;
-  const favCount = snippets.filter((s) => s.isFavorite).length;
+  const activeSnippets = useMemo(
+    () => snippets.filter((snippet) => !snippet.isArchived && snippet.deletedAt === null),
+    [snippets]
+  );
+
+  const allCount = activeSnippets.length;
+  const todoCount = activeSnippets.filter((s) => s.isTodo && !s.isDone).length;
+  const favCount = activeSnippets.filter((s) => s.isFavorite).length;
   const folderCountMap = new Map<string, number>();
-  snippets.forEach((snippet) => {
+  activeSnippets.forEach((snippet) => {
     if (!snippet.folderId) return;
     folderCountMap.set(snippet.folderId, (folderCountMap.get(snippet.folderId) ?? 0) + 1);
   });
 
   const tagCountMap = new Map<string, number>();
-  snippets.forEach((s) => {
+  activeSnippets.forEach((s) => {
     s.tags.forEach((t) => {
       tagCountMap.set(t, (tagCountMap.get(t) ?? 0) + 1);
     });
@@ -48,11 +53,11 @@ const Sidebar: React.FC<SidebarProps> = ({ search, onSearchChange }) => {
 
   const visibleTags = useMemo(() => {
     const persistedTags = tags.map((tag) => tag.name);
-    const dynamicTags = snippets.flatMap((snippet) => snippet.tags);
+    const dynamicTags = activeSnippets.flatMap((snippet) => snippet.tags);
     return Array.from(new Set([...persistedTags, ...dynamicTags])).sort((a, b) =>
       a.localeCompare(b, language)
     );
-  }, [language, snippets, tags]);
+  }, [activeSnippets, language, tags]);
 
   const setMode = (mode: FilterMode) => {
     setFilterMode(mode);

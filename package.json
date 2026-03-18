@@ -1,11 +1,11 @@
 {
   "name": "snippetbutler",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "SnippetButler - a Windows desktop app for saving and organizing text snippets.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tauri build",
+    "build": "vite build",
     "preview": "vite preview",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
